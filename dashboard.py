@@ -12,7 +12,10 @@ def test_openai_api():
     try:
         response = openai.ChatCompletion.create(
             model="gpt-4",  # Use "gpt-3.5-turbo" if GPT-4 is unavailable
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
         )
         # Extract and return the response
         return response["choices"][0]["message"]["content"]
