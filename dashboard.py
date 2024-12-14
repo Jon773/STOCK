@@ -14,7 +14,7 @@ def get_sentiment_scores(headlines):
     scores = []
     for headline in headlines:
         analysis = TextBlob(headline)
-        scores.append(analysis.sentiment.polarity)
+        scores.append(analysis.sentiment.polarity)  # Polarity ranges from -1 (negative) to +1 (positive)
     return np.mean(scores)
 
 # Helper Function: Fetch Stock Data
@@ -49,12 +49,14 @@ def predict_prices(data, days):
     return predictions
 
 # Dashboard Layout
-st.title("Jonathan's AI-Powered Stock Test Dashboard Updated w/ Sentiment Analysis ")
+st.title("Jonathan's AI-Powered Stock Dashboard v3")
 
-# Sidebar Configuration
-st.sidebar.header("Stock Selection")
-selected_stock = st.sidebar.text_input("Enter Stock Ticker (e.g., AAPL, TSLA):", "AAPL")
-days = st.sidebar.slider("Prediction Period (Days):", 1, 10, 5)
+# Top Section for Stock Selection
+col1, col2 = st.columns([2, 2])
+with col1:
+    selected_stock = st.text_input("Enter Stock Ticker (e.g., AAPL, TSLA):", "AAPL")
+with col2:
+    days = st.slider("Prediction Period (Days):", 1, 10, 5)
 
 # Fetch Stock Data
 data_load_state = st.text("Loading stock data...")
@@ -109,3 +111,4 @@ st.plotly_chart(fig_pred)
 # Footer
 st.write("---")
 st.write("Dashboard powered by AI and real-time stock data.")
+
