@@ -16,16 +16,24 @@ PUSHSHIFT_URL = "https://api.pushshift.io/reddit/search/submission/"
 
 # Helper Function: Fetch Reddit Posts
 def fetch_reddit_posts(stock_name, limit=10):
-    query = f"{stock_name} stock OR {stock_name} finance"
+    query = f"{stock_name} OR {stock_name} stock OR {stock_name} finance"
     params = {
         "q": query,
-        "subreddit": "stocks",  # Target the 'stocks' subreddit
+        "subreddit": "stocks",
         "size": limit,
         "sort": "desc",
         "sort_type": "created_utc",
     }
     response = requests.get(PUSHSHIFT_URL, params=params)
+    
+    # Check if the request succeeded
+    if response.status_code != 200:
+        st.error(f"Error fetching Reddit posts: {response.status_code}")
+        return []
+    
     posts = response.json().get("data", [])
+    if not posts:
+        st.warning(f"No Reddit posts found for query: {query}")
     return posts
 
 # Helper Function: Summarize Reddit Chatter
