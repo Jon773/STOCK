@@ -4,7 +4,3 @@ streamlit
 yfinance
 tensorflow==2.13
 tf-keras
-nltk
-transformers
-plotly
-requests
