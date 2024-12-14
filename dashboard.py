@@ -1,7 +1,12 @@
 import openai
 
-openai.api_key = "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"  # Replace with your API key
+openai.api_key = "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"  # Replace with your API key
 
-models = openai.Model.list()
-for model in models["data"]:
-    print(model["id"])
+try:
+    # List available models
+    models = openai.Model.list()
+    print("Available models:")
+    for model in models["data"]:
+        print(model["id"])
+except Exception as e:
+    print(f"Error: {e}")
