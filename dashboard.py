@@ -5,7 +5,6 @@ import yfinance as yf
 import plotly.graph_objs as go
 from sklearn.linear_model import LinearRegression
 import openai
-import requests
 
 # Set OpenAI API key
 openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -46,14 +45,15 @@ def predict_target_price(data, days):
         st.error(f"Error predicting target price: {e}")
         return None
 
-# Fetch analyst target price with error handling
+# Fetch live price as a placeholder for target price
 def get_analyst_target_price(ticker):
     try:
         stock = yf.Ticker(ticker)
-        return stock.info.get('targetMeanPrice', "N/A")
-    except requests.exceptions.HTTPError as e:
-        st.error(f"HTTP Error for {ticker}: {e}")
-        return "N/A"
+        data = stock.history(period="1mo")
+        if not data.empty:
+            return f"${data['Close'].iloc[-1]:.2f}"
+        else:
+            return "Unavailable"
     except Exception as e:
         st.error(f"Error fetching target price for {ticker}: {e}")
         return "N/A"
@@ -111,20 +111,9 @@ def analyze_top_stocks(horizon):
         })
     return pd.DataFrame(results)
 
-# Get OpenAI API usage
+# API usage placeholder
 def get_api_usage():
-    try:
-        response = requests.get(
-            "https://api.openai.com/v1/dashboard/billing/usage",
-            headers={"Authorization": f"Bearer {st.secrets['OPENAI_API_KEY']}"},
-        )
-        if response.status_code == 200:
-            usage_data = response.json()
-            return f"API Usage: {usage_data.get('total_usage', 0)} tokens used."
-        else:
-            return "Error fetching API usage."
-    except Exception as e:
-        return f"Error fetching API usage: {str(e)}"
+    return "API usage tracking is currently unavailable. Please check the OpenAI dashboard for detailed usage."
 
 # App layout
 st.title("AI-Powered Stock Dashboard")
@@ -155,5 +144,4 @@ if stock:
 # Footer
 st.write("---")
 st.write(get_api_usage())
-
 
