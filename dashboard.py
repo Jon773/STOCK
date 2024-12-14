@@ -32,7 +32,7 @@ def fetch_news_data(stock_name):
     return [article['title'] for article in articles if 'title' in article]
 
 # Dashboard Layout
-st.title("AI-Powered Stock Trading Dashboard")
+st.title("AI-Powered Jonathan's Demo Stock Dashboard - Fucking Cool!")
 
 # Sidebar Configuration
 st.sidebar.header("Stock Selection")
