@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import plotly.graph_objs as go
-from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
+from transformers import pipeline, TFAutoModelForSequenceClassification, AutoTokenizer
 import requests
 from datetime import datetime, timedelta
 
@@ -11,11 +11,11 @@ from datetime import datetime, timedelta
 @st.cache_resource
 def get_sentiment_scores(headlines):
     try:
-        # Load the model and tokenizer locally
+        # Load the model and tokenizer locally using TensorFlow
         model_name = "distilbert-base-uncased-finetuned-sst-2-english"
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSequenceClassification.from_pretrained(model_name)
-        sentiment_model = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer)
+        model = TFAutoModelForSequenceClassification.from_pretrained(model_name)
+        sentiment_model = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer, framework="tf")
         
         # Process headlines
         scores = []
@@ -91,3 +91,4 @@ st.write("Predictions will be displayed here in the next version!")
 # Footer
 st.write("---")
 st.write("Dashboard powered by AI and real-time stock data.")
+
