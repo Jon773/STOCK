@@ -83,5 +83,77 @@ def generate_investor_insights(stock_name):
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": f"You are {investor['name']}, a renowned investor."},
-       
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            insights.append(f"{investor['name']}: {response['choices'][0]['message']['content']}")
+        except Exception as e:
+            insights.append(f"{investor['name']}: Error generating insights: {str(e)}")
+    return "\n".join(insights)
+
+# Analyze top stocks
+def analyze_top_stocks(horizon):
+    results = []
+    for stock in STOCK_LIST:
+        data = get_stock_data(stock)
+        if data is None:
+            continue
+        current_price = data['Close'].iloc[-1]
+        projected_price = predict_target_price(data, horizon)
+        analyst_target_price = get_analyst_target_price(stock)
+        sentiment = analyze_sentiment(stock)
+        results.append({
+            "Stock": stock,
+            "Current Price": current_price,
+            "Projected Price": projected_price,
+            "Analyst Target Price": analyst_target_price,
+            "Sentiment": sentiment,
+        })
+    return pd.DataFrame(results)
+
+# Get OpenAI API usage
+def get_api_usage():
+    try:
+        response = requests.get(
+            "https://api.openai.com/v1/dashboard/billing/usage",
+            headers={"Authorization": f"Bearer {st.secrets['OPENAI_API_KEY']}"},
+        )
+        if response.status_code == 200:
+            usage_data = response.json()
+            return f"API Usage: {usage_data.get('total_usage', 0)} tokens used."
+        else:
+            return "Error fetching API usage."
+    except Exception as e:
+        return f"Error fetching API usage: {str(e)}"
+
+# App layout
+st.title("AI-Powered Stock Dashboard")
+horizon = st.slider("Performance Horizon (Days):", 30, 365, 180)
+
+# Top stocks
+st.subheader("Top 10 Stocks to Buy Now")
+top_stocks = analyze_top_stocks(horizon)
+if not top_stocks.empty:
+    st.table(top_stocks)
+else:
+    st.write("No stock data available.")
+
+# Individual stock analysis
+st.subheader("Individual Stock Analysis")
+stock = st.text_input("Enter Stock Ticker:", "AAPL")
+if stock:
+    stock_data = get_stock_data(stock)
+    sentiment = analyze_sentiment(stock)
+    investor_insights = generate_investor_insights(stock)
+    st.write(f"Sentiment for {stock}: {sentiment}")
+    st.write(f"Investor Insights for {stock}: {investor_insights}")
+    if stock_data is not None:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Price'))
+        st.plotly_chart(fig)
+
+# Footer
+st.write("---")
+st.write(get_api_usage())
+
 
