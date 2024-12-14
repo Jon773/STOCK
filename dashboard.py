@@ -3,48 +3,50 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import plotly.graph_objs as go
-from textblob import TextBlob
 from sklearn.linear_model import LinearRegression
-from datetime import timedelta
 import openai
 import requests
 
 # Set OpenAI API key
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# Predefined list of top investors and their strategies
+# Top investors and strategies
 TOP_INVESTORS = [
     {"name": "Warren Buffett", "strategy": "Focus on intrinsic value and long-term fundamentals."},
     {"name": "Peter Lynch", "strategy": "Invest in what you know and look for undervalued growth stocks."},
     {"name": "Charlie Munger", "strategy": "Focus on quality companies with a strong competitive advantage."},
 ]
 
-# Predefined list of stock tickers for analysis
+# Predefined stock tickers
 STOCK_LIST = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX", "JPM", "BAC"]
 
-# Fetch stock data using yfinance
+# Fetch stock data
 def get_stock_data(ticker, period="1y"):
-    stock = yf.Ticker(ticker)
-    data = stock.history(period=period)
-    data.reset_index(inplace=True)
-    return data
+    try:
+        stock = yf.Ticker(ticker)
+        data = stock.history(period=period)
+        data.reset_index(inplace=True)
+        return data
+    except Exception as e:
+        return None
 
-# Predict target price using historical data
+# Predict target price
 def predict_target_price(data, days):
-    data['Day'] = np.arange(len(data))  # Add a numeric day index
-    X = data[['Day']]
-    y = data['Close']
+    try:
+        data['Day'] = np.arange(len(data))
+        X = data[['Day']]
+        y = data['Close']
+        model = LinearRegression()
+        model.fit(X, y)
+        future_days = np.arange(len(data), len(data) + days).reshape(-1, 1)
+        predictions = model.predict(future_days)
+        return predictions[-1]
+    except Exception as e:
+        return None
 
-    model = LinearRegression()
-    model.fit(X, y)
-
-    future_days = np.arange(len(data), len(data) + days).reshape(-1, 1)
-    predictions = model.predict(future_days)
-    return predictions[-1]  # Return the last prediction as the target price
-
-# Analyze sentiment for a stock
+# Fetch OpenAI sentiment analysis
 def analyze_sentiment(stock_name):
-    prompt = f"Analyze the sentiment and current chatter about the stock {stock_name}. Provide a summary and indicate whether sentiment is positive, neutral, or negative."
+    prompt = f"Provide sentiment analysis for {stock_name}. Summarize recent investor chatter."
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -57,12 +59,12 @@ def analyze_sentiment(stock_name):
     except Exception as e:
         return f"Error analyzing sentiment: {str(e)}"
 
-# Generate insights from top investors
+# Generate insights for investors
 def generate_investor_insights(stock_name):
     insights = []
     for investor in TOP_INVESTORS:
-        prompt = f"Based on {investor['strategy']}, would {investor['name']} recommend buying, holding, or selling {stock_name}? Provide reasoning."
         try:
+            prompt = f"Based on {investor['strategy']}, what would {investor['name']} recommend for {stock_name}?"
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
@@ -75,29 +77,27 @@ def generate_investor_insights(stock_name):
             insights.append(f"{investor['name']}: Error generating insights: {str(e)}")
     return "\n".join(insights)
 
-# Analyze the top 10 stocks
+# Analyze top stocks
 def analyze_top_stocks(horizon):
     results = []
     for stock in STOCK_LIST:
-        try:
-            data = get_stock_data(stock, period="1y")
-            projected_price = predict_target_price(data, horizon)
-            current_price = data['Close'].iloc[-1]
-            analyst_target_price = yf.Ticker(stock).info.get('targetMeanPrice', "N/A")
-            sentiment = analyze_sentiment(stock)
-
-            results.append({
-                "Stock": stock,
-                "Current Price": current_price,
-                "Analyst Target Price": analyst_target_price,
-                "Projected Price": projected_price,
-                "Sentiment": sentiment,
-            })
-        except Exception as e:
+        data = get_stock_data(stock)
+        if data is None:
             continue
+        current_price = data['Close'].iloc[-1]
+        projected_price = predict_target_price(data, horizon)
+        analyst_target_price = yf.Ticker(stock).info.get('targetMeanPrice', "N/A")
+        sentiment = analyze_sentiment(stock)
+        results.append({
+            "Stock": stock,
+            "Current Price": current_price,
+            "Projected Price": projected_price,
+            "Analyst Target Price": analyst_target_price,
+            "Sentiment": sentiment,
+        })
     return pd.DataFrame(results)
 
-# Real-time API usage
+# Get OpenAI API usage
 def get_api_usage():
     try:
         response = requests.get(
@@ -106,41 +106,36 @@ def get_api_usage():
         )
         if response.status_code == 200:
             usage_data = response.json()
-            return f"OpenAI API Usage: {usage_data.get('total_usage', 0)} tokens"
+            return f"API Usage: {usage_data.get('total_usage', 0)} tokens used."
         else:
-            return f"Unable to fetch API usage: {response.status_code}"
+            return "Error fetching API usage."
     except Exception as e:
         return f"Error fetching API usage: {str(e)}"
 
-# Streamlit app layout
-st.title("AI-Powered Stock Trading Dashboard")
+# App layout
+st.title("AI-Powered Stock Dashboard")
+horizon = st.slider("Performance Horizon (Days):", 30, 365, 180)
 
-# Adjustable performance horizon
-horizon = st.slider("Select Performance Horizon (Days):", 30, 365, 180)
-
-# Display top 10 stocks
+# Top stocks
 st.subheader("Top 10 Stocks to Buy Now")
 top_stocks = analyze_top_stocks(horizon)
-st.write(top_stocks)
+st.table(top_stocks)
 
 # Individual stock analysis
 st.subheader("Individual Stock Analysis")
-stock_picker = st.text_input("Enter Stock Ticker (e.g., AAPL, TSLA):", "AAPL")
-if stock_picker:
-    stock_data = get_stock_data(stock_picker)
-    investor_insights = generate_investor_insights(stock_picker)
-    sentiment = analyze_sentiment(stock_picker)
+stock = st.text_input("Enter Stock Ticker:", "AAPL")
+if stock:
+    stock_data = get_stock_data(stock)
+    sentiment = analyze_sentiment(stock)
+    investor_insights = generate_investor_insights(stock)
+    st.write(f"Sentiment for {stock}: {sentiment}")
+    st.write(f"Investor Insights for {stock}: {investor_insights}")
+    if stock_data is not None:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Price'))
+        st.plotly_chart(fig)
 
-    st.write(f"Investor Insights for {stock_picker}:")
-    st.write(investor_insights)
-    st.write(f"Sentiment Analysis for {stock_picker}:")
-    st.write(sentiment)
-
-    # Plot historical data
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Close Price'))
-    st.plotly_chart(fig)
-
-# Footer with API usage
+# Footer
 st.write("---")
 st.write(get_api_usage())
+
