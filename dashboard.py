@@ -103,13 +103,12 @@ news_load_state.text("News and sentiment fetched successfully!")
 
 # Display Stock Chart
 st.subheader(f"Stock Price Data for {selected_stock}")
+predictions = predict_prices(stock_data, days)
+prediction_dates = [stock_data['Date'].iloc[-1] + timedelta(days=i+1) for i in range(days)]
+
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Historical Prices'))
-fig.add_trace(go.Scatter(x=[data_load_state['Date'].iloc[-1] + timedelta(days=i+1) for i in range(days)],
-                         y=predict_prices(stock_data, days),
-                         mode='lines',
-                         name='Predicted Prices',
-                         line=dict(dash='dot')))
+fig.add_trace(go.Scatter(x=prediction_dates, y=predictions, mode='lines', name='Predicted Prices', line=dict(dash='dot')))
 fig.update_layout(title=f"{selected_stock} Stock Prices", xaxis_title='Date', yaxis_title='Price (USD)')
 st.plotly_chart(fig)
 
@@ -132,3 +131,4 @@ for headline in news_headlines[:5]:
 # Footer
 st.write("---")
 st.write("Dashboard powered by AI and real-time stock data.")
+
