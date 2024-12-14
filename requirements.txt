@@ -1,6 +1,3 @@
+streamlit
 pandas
 numpy
-streamlit
-yfinance
-tensorflow==2.13
-tf-keras
