@@ -3,19 +3,29 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import plotly.graph_objs as go
-from transformers import pipeline
+from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
 import requests
 from datetime import datetime, timedelta
 
 # Helper Function: Sentiment Analysis
 @st.cache_resource
 def get_sentiment_scores(headlines):
-    sentiment_model = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
-    scores = []
-    for headline in headlines:
-        result = sentiment_model(headline)[0]
-        scores.append(1 if result['label'] == 'POSITIVE' else -1)
-    return np.mean(scores)
+    try:
+        # Load the model and tokenizer locally
+        model_name = "distilbert-base-uncased-finetuned-sst-2-english"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForSequenceClassification.from_pretrained(model_name)
+        sentiment_model = pipeline("sentiment-analysis", model=model, tokenizer=tokenizer)
+        
+        # Process headlines
+        scores = []
+        for headline in headlines:
+            result = sentiment_model(headline)[0]
+            scores.append(1 if result['label'] == 'POSITIVE' else -1)
+        return np.mean(scores)
+    except Exception as e:
+        st.error(f"Failed to analyze sentiment: {e}")
+        return 0  # Default to neutral sentiment if there's an issue
 
 # Helper Function: Fetch Stock Data
 def get_stock_data(ticker, period="1y"):
