@@ -94,6 +94,11 @@ st.title("AI-Powered Stock Trading Dashboard")
 st.subheader("Top 10 Growth Stocks")
 horizon = st.slider("Select Growth Horizon (Days):", 1, 30, 7)
 top_stocks = analyze_top_stocks(horizon)
+
+# Fix for ArrowTypeError: Truncate long strings and ensure string types
+if "Summary" in top_stocks.columns:
+    top_stocks["Summary"] = top_stocks["Summary"].apply(lambda x: x[:200] + "..." if len(x) > 200 else x)
+top_stocks = top_stocks.astype(str)  # Convert all columns to strings
 st.table(top_stocks)
 
 # Stock Selection Section
