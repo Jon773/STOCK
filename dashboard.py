@@ -11,6 +11,33 @@ import requests
 # Predefined list of stocks for Top 10 analysis
 STOCK_LIST = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX", "JPM", "BAC"]
 
+# Pushshift API URL
+PUSHSHIFT_URL = "https://api.pushshift.io/reddit/search/submission/"
+
+# Helper Function: Fetch Reddit Posts
+def fetch_reddit_posts(stock_name, limit=10):
+    query = f"{stock_name} stock OR {stock_name} finance"
+    params = {
+        "q": query,
+        "subreddit": "stocks",  # Target the 'stocks' subreddit
+        "size": limit,
+        "sort": "desc",
+        "sort_type": "created_utc",
+    }
+    response = requests.get(PUSHSHIFT_URL, params=params)
+    posts = response.json().get("data", [])
+    return posts
+
+# Helper Function: Summarize Reddit Chatter
+def summarize_reddit(posts):
+    if not posts:
+        return "No Recent Reddit Chatter", 0  # No posts found
+    summaries = [post["title"] for post in posts if "title" in post]
+    all_text = " ".join(summaries)
+    sentiment = TextBlob(all_text).sentiment.polarity  # Calculate sentiment
+    summary = " ".join(summaries[:2])  # Use first two post titles for brevity
+    return summary, sentiment
+
 # Helper Function: Sentiment Analysis
 @st.cache_resource
 def get_sentiment_scores(headlines):
@@ -27,15 +54,6 @@ def get_stock_data(ticker, period="1y"):
     data.reset_index(inplace=True)
     return data
 
-# Helper Function: Fetch News Data
-def fetch_news_data(stock_name):
-    api_key = "your_newsapi_key"  # Replace with your NewsAPI key
-    query = f"{stock_name} stock OR {stock_name} finance"
-    url = f"https://newsapi.org/v2/everything?q={query}&from={(datetime.now() - timedelta(days=7)).date()}&sortBy=popularity&apiKey={api_key}"
-    response = requests.get(url)
-    articles = response.json().get("articles", [])
-    return [article['title'] for article in articles if 'title' in article]
-
 # Helper Function: Price Prediction
 def predict_prices(data, days):
     data['Day'] = np.arange(len(data))  # Numeric index for each day
@@ -49,16 +67,16 @@ def predict_prices(data, days):
     predictions = model.predict(future_days)
     return predictions
 
-# Helper Function: Analyze Stocks
+# Helper Function: Analyze Top Stocks
 def analyze_top_stocks(horizon):
     results = []
     for stock in STOCK_LIST:
         try:
             data = get_stock_data(stock, period="1y")
             predictions = predict_prices(data, horizon)
-            sentiment_score = get_sentiment_scores(fetch_news_data(stock))
+            posts = fetch_reddit_posts(stock, limit=10)
+            reddit_summary, reddit_sentiment = summarize_reddit(posts)
 
-            # Analyze stock performance
             recent_growth = (data['Close'].iloc[-1] - data['Close'].iloc[-30]) / data['Close'].iloc[-30] * 100
             future_growth = (predictions[-1] - data['Close'].iloc[-1]) / data['Close'].iloc[-1] * 100
 
@@ -66,13 +84,13 @@ def analyze_top_stocks(horizon):
                 "Stock": stock,
                 "Recent Growth (%)": recent_growth,
                 "Predicted Growth (%)": future_growth,
-                "Sentiment": sentiment_score,
-                "Reason": f"Strong growth potential with {future_growth:.2f}% predicted growth and positive sentiment."
+                "Sentiment": reddit_sentiment,
+                "Reddit Chatter": reddit_summary,
+                "Reason": f"Predicted growth: {future_growth:.2f}% with positive chatter."
             })
         except Exception as e:
             continue
 
-    # Sort by predicted growth and return top 10
     results = sorted(results, key=lambda x: x["Predicted Growth (%)"], reverse=True)[:10]
     return pd.DataFrame(results)
 
@@ -95,10 +113,14 @@ data_load_state = st.text("Loading stock data...")
 stock_data = get_stock_data(selected_stock)
 data_load_state.text("Stock data loaded successfully!")
 
+# Fetch Reddit Chatter for Selected Stock
+reddit_posts = fetch_reddit_posts(selected_stock, limit=10)
+reddit_summary, reddit_sentiment = summarize_reddit(reddit_posts)
+
 # Fetch News and Sentiment
 news_load_state = st.text("Fetching news and sentiment...")
-news_headlines = fetch_news_data(selected_stock)
-sentiment_score = get_sentiment_scores(news_headlines)
+news_headlines = [post["title"] for post in reddit_posts]  # Use Reddit posts as news source
+sentiment_score = reddit_sentiment
 news_load_state.text("News and sentiment fetched successfully!")
 
 # Display Stock Chart
@@ -112,23 +134,11 @@ fig.add_trace(go.Scatter(x=prediction_dates, y=predictions, mode='lines', name='
 fig.update_layout(title=f"{selected_stock} Stock Prices", xaxis_title='Date', yaxis_title='Price (USD)')
 st.plotly_chart(fig)
 
-# Display Sentiment Score
-st.subheader("Sentiment Analysis")
-st.write(f"Average Sentiment Score for {selected_stock}: {sentiment_score:.2f}")
-
-if sentiment_score > 0:
-    st.success("Overall Positive Sentiment!")
-elif sentiment_score < 0:
-    st.error("Overall Negative Sentiment!")
-else:
-    st.warning("Neutral Sentiment")
-
-# Display News Headlines
-st.subheader("Recent News Headlines")
-for headline in news_headlines[:5]:
-    st.write(f"- {headline}")
+# Display Reddit Chatter Summary
+st.subheader("Reddit Chatter Summary")
+st.write(f"Summary: {reddit_summary}")
+st.write(f"Sentiment Score: {sentiment_score:.2f}")
 
 # Footer
 st.write("---")
-st.write("Dashboard powered by AI and real-time stock data.")
-
+st.write("Dashboard powered by AI, Pushshift, and real-time stock data.")
