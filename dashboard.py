@@ -28,6 +28,7 @@ def get_stock_data(ticker, period="1y"):
         data.reset_index(inplace=True)
         return data
     except Exception as e:
+        st.error(f"Error fetching data for {ticker}: {e}")
         return None
 
 # Predict target price
@@ -42,7 +43,20 @@ def predict_target_price(data, days):
         predictions = model.predict(future_days)
         return predictions[-1]
     except Exception as e:
+        st.error(f"Error predicting target price: {e}")
         return None
+
+# Fetch analyst target price with error handling
+def get_analyst_target_price(ticker):
+    try:
+        stock = yf.Ticker(ticker)
+        return stock.info.get('targetMeanPrice', "N/A")
+    except requests.exceptions.HTTPError as e:
+        st.error(f"HTTP Error for {ticker}: {e}")
+        return "N/A"
+    except Exception as e:
+        st.error(f"Error fetching target price for {ticker}: {e}")
+        return "N/A"
 
 # Fetch OpenAI sentiment analysis
 def analyze_sentiment(stock_name):
@@ -69,73 +83,5 @@ def generate_investor_insights(stock_name):
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": f"You are {investor['name']}, a renowned investor."},
-                    {"role": "user", "content": prompt},
-                ],
-            )
-            insights.append(f"{investor['name']}: {response['choices'][0]['message']['content']}")
-        except Exception as e:
-            insights.append(f"{investor['name']}: Error generating insights: {str(e)}")
-    return "\n".join(insights)
-
-# Analyze top stocks
-def analyze_top_stocks(horizon):
-    results = []
-    for stock in STOCK_LIST:
-        data = get_stock_data(stock)
-        if data is None:
-            continue
-        current_price = data['Close'].iloc[-1]
-        projected_price = predict_target_price(data, horizon)
-        analyst_target_price = yf.Ticker(stock).info.get('targetMeanPrice', "N/A")
-        sentiment = analyze_sentiment(stock)
-        results.append({
-            "Stock": stock,
-            "Current Price": current_price,
-            "Projected Price": projected_price,
-            "Analyst Target Price": analyst_target_price,
-            "Sentiment": sentiment,
-        })
-    return pd.DataFrame(results)
-
-# Get OpenAI API usage
-def get_api_usage():
-    try:
-        response = requests.get(
-            "https://api.openai.com/v1/dashboard/billing/usage",
-            headers={"Authorization": f"Bearer {st.secrets['OPENAI_API_KEY']}"},
-        )
-        if response.status_code == 200:
-            usage_data = response.json()
-            return f"API Usage: {usage_data.get('total_usage', 0)} tokens used."
-        else:
-            return "Error fetching API usage."
-    except Exception as e:
-        return f"Error fetching API usage: {str(e)}"
-
-# App layout
-st.title("AI-Powered Stock Dashboard")
-horizon = st.slider("Performance Horizon (Days):", 30, 365, 180)
-
-# Top stocks
-st.subheader("Top 10 Stocks to Buy Now")
-top_stocks = analyze_top_stocks(horizon)
-st.table(top_stocks)
-
-# Individual stock analysis
-st.subheader("Individual Stock Analysis")
-stock = st.text_input("Enter Stock Ticker:", "AAPL")
-if stock:
-    stock_data = get_stock_data(stock)
-    sentiment = analyze_sentiment(stock)
-    investor_insights = generate_investor_insights(stock)
-    st.write(f"Sentiment for {stock}: {sentiment}")
-    st.write(f"Investor Insights for {stock}: {investor_insights}")
-    if stock_data is not None:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Price'))
-        st.plotly_chart(fig)
-
-# Footer
-st.write("---")
-st.write(get_api_usage())
+       
 
