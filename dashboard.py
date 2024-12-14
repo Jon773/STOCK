@@ -4,8 +4,9 @@ import numpy as np
 import yfinance as yf
 import plotly.graph_objs as go
 from textblob import TextBlob
-import requests
+from sklearn.linear_model import LinearRegression
 from datetime import datetime, timedelta
+import requests
 
 # Helper Function: Sentiment Analysis
 @st.cache_resource
@@ -13,7 +14,7 @@ def get_sentiment_scores(headlines):
     scores = []
     for headline in headlines:
         analysis = TextBlob(headline)
-        scores.append(analysis.sentiment.polarity)  # Polarity ranges from -1 (negative) to +1 (positive)
+        scores.append(analysis.sentiment.polarity)
     return np.mean(scores)
 
 # Helper Function: Fetch Stock Data
@@ -31,8 +32,24 @@ def fetch_news_data(stock_name):
     articles = response.json().get("articles", [])
     return [article['title'] for article in articles if 'title' in article]
 
+# Helper Function: Price Prediction
+def predict_prices(data, days):
+    # Prepare data for prediction
+    data['Day'] = np.arange(len(data))  # Numeric index for each day
+    X = data[['Day']]  # Features
+    y = data['Close']  # Target variable (closing prices)
+
+    # Train Linear Regression model
+    model = LinearRegression()
+    model.fit(X, y)
+
+    # Predict future prices
+    future_days = np.arange(len(data), len(data) + days).reshape(-1, 1)
+    predictions = model.predict(future_days)
+    return predictions
+
 # Dashboard Layout
-st.title("AI-Powered Jonathan's Demo Stock Dashboard - Fucking Cool!")
+st.title("Jonathan's AI-Powered Stock Test Dashboard Updated w/ Sentiment Analysis ")
 
 # Sidebar Configuration
 st.sidebar.header("Stock Selection")
@@ -73,11 +90,22 @@ st.subheader("Recent News Headlines")
 for headline in news_headlines[:5]:
     st.write(f"- {headline}")
 
-# Placeholder for LSTM Prediction
-st.subheader("Price Prediction (LSTM - Placeholder)")
-st.write("Predictions will be displayed here in the next version!")
+# Price Prediction
+st.subheader(f"Price Prediction for the Next {days} Days")
+predictions = predict_prices(stock_data, days)
+prediction_dates = [stock_data['Date'].iloc[-1] + timedelta(days=i+1) for i in range(days)]
+prediction_df = pd.DataFrame({'Date': prediction_dates, 'Predicted Price': predictions})
+
+# Display Predictions
+st.write(prediction_df)
+
+# Plot Predictions
+fig_pred = go.Figure()
+fig_pred.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Historical Prices'))
+fig_pred.add_trace(go.Scatter(x=prediction_df['Date'], y=prediction_df['Predicted Price'], mode='lines', name='Predicted Prices'))
+fig_pred.update_layout(title="Historical and Predicted Prices", xaxis_title="Date", yaxis_title="Price (USD)")
+st.plotly_chart(fig_pred)
 
 # Footer
 st.write("---")
 st.write("Dashboard powered by AI and real-time stock data.")
-
