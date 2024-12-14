@@ -6,4 +6,4 @@ plotly==5.16.0
 textblob
 scikit-learn
 requests
-openai
+openai>=1.0.0
