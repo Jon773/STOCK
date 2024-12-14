@@ -5,6 +5,7 @@ import yfinance as yf
 import plotly.graph_objs as go
 from sklearn.linear_model import LinearRegression
 import openai
+from datetime import timedelta
 
 # Set OpenAI API key
 openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -45,22 +46,19 @@ def predict_target_price(data, days):
         st.error(f"Error predicting target price: {e}")
         return None
 
-# Fetch live price as a placeholder for target price
-def get_analyst_target_price(ticker):
+# Fetch live price and placeholder target price
+def get_live_price(ticker):
     try:
         stock = yf.Ticker(ticker)
-        data = stock.history(period="1mo")
-        if not data.empty:
-            return f"${data['Close'].iloc[-1]:.2f}"
-        else:
-            return "Unavailable"
+        data = stock.history(period="1d")
+        return data['Close'].iloc[-1] if not data.empty else "Unavailable"
     except Exception as e:
-        st.error(f"Error fetching target price for {ticker}: {e}")
+        st.error(f"Error fetching live price for {ticker}: {e}")
         return "N/A"
 
 # Fetch OpenAI sentiment analysis
-def analyze_sentiment(stock_name):
-    prompt = f"Provide sentiment analysis for {stock_name}. Summarize recent investor chatter."
+def analyze_sentiment(stock_name, concise=True):
+    prompt = f"Provide a {'concise' if concise else 'detailed'} sentiment analysis for {stock_name}. Summarize recent investor chatter."
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -73,7 +71,7 @@ def analyze_sentiment(stock_name):
     except Exception as e:
         return f"Error analyzing sentiment: {str(e)}"
 
-# Generate insights for investors
+# Generate insights for top investors
 def generate_investor_insights(stock_name):
     insights = []
     for investor in TOP_INVESTORS:
@@ -91,6 +89,21 @@ def generate_investor_insights(stock_name):
             insights.append(f"{investor['name']}: Error generating insights: {str(e)}")
     return "\n".join(insights)
 
+# Back-test logic for confidence level
+def backtest_model(data, test_period):
+    try:
+        train_data = data[:-test_period]
+        test_data = data[-test_period:]
+        projected_prices = predict_target_price(train_data, test_period)
+
+        actual_prices = test_data['Close'].values
+        accuracy = 100 - np.mean(np.abs((actual_prices - projected_prices) / actual_prices)) * 100
+
+        return accuracy
+    except Exception as e:
+        st.error(f"Error backtesting model: {e}")
+        return None
+
 # Analyze top stocks
 def analyze_top_stocks(horizon):
     results = []
@@ -98,22 +111,18 @@ def analyze_top_stocks(horizon):
         data = get_stock_data(stock)
         if data is None:
             continue
-        current_price = data['Close'].iloc[-1]
+        current_price = get_live_price(stock)
         projected_price = predict_target_price(data, horizon)
-        analyst_target_price = get_analyst_target_price(stock)
-        sentiment = analyze_sentiment(stock)
+        sentiment = analyze_sentiment(stock, concise=True)
+        investor_sentiment = generate_investor_insights(stock)
         results.append({
             "Stock": stock,
             "Current Price": current_price,
             "Projected Price": projected_price,
-            "Analyst Target Price": analyst_target_price,
-            "Sentiment": sentiment,
+            "Investor Sentiment": investor_sentiment,
+            "General Sentiment": sentiment,
         })
     return pd.DataFrame(results)
-
-# API usage placeholder
-def get_api_usage():
-    return "API usage tracking is currently unavailable. Please check the OpenAI dashboard for detailed usage."
 
 # App layout
 st.title("AI-Powered Stock Dashboard")
@@ -132,16 +141,20 @@ st.subheader("Individual Stock Analysis")
 stock = st.text_input("Enter Stock Ticker:", "AAPL")
 if stock:
     stock_data = get_stock_data(stock)
-    sentiment = analyze_sentiment(stock)
+    sentiment = analyze_sentiment(stock, concise=True)
     investor_insights = generate_investor_insights(stock)
-    st.write(f"Sentiment for {stock}: {sentiment}")
+    st.write(f"General Sentiment for {stock}: {sentiment}")
     st.write(f"Investor Insights for {stock}: {investor_insights}")
     if stock_data is not None:
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Price'))
         st.plotly_chart(fig)
+        if st.button("Back Test"):
+            confidence = backtest_model(stock_data, test_period=150)  # Adjustable period
+            st.write(f"Confidence Level: {confidence:.2f}%")
 
 # Footer
 st.write("---")
-st.write(get_api_usage())
+st.write("AI Dashboard powered by OpenAI and yfinance.")
+
 
