@@ -1,5 +1,6 @@
 streamlit
 pandas
 numpy
-yfinance
+yfinance==0.2.18
 plotly==5.16.0
+textblob
