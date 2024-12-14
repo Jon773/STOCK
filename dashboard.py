@@ -17,10 +17,10 @@ def test_openai_api():
                 {"role": "user", "content": prompt},
             ],
         )
-        # Extract and return the response
-        return response["choices"][0]["message"]["content"]
+        # Return the response text
+        return response['choices'][0]['message']['content']
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error: {str(e)}"
 
 # Streamlit interface to display the result
 st.title("OpenAI API Test")
