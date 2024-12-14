@@ -2,3 +2,4 @@ streamlit
 pandas
 numpy
 yfinance==0.2.18
+plotly
