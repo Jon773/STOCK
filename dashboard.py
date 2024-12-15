@@ -17,8 +17,9 @@ TOP_INVESTORS = [
     {"name": "Charlie Munger", "strategy": "Focus on quality companies with a strong competitive advantage."},
 ]
 
-# Predefined stock tickers
-STOCK_LIST = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "NFLX", "JPM", "BAC"]
+# Predefined stock tickers (conventional + hidden gems)
+CONVENTIONAL_STOCKS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+HIDDEN_GEMS = ["PLTR", "SHOP", "SQ", "CRWD", "NET"]
 
 # Fetch stock data
 def get_stock_data(ticker, period="1y"):
@@ -46,7 +47,7 @@ def predict_target_price(data, days):
         st.error(f"Error predicting target price: {e}")
         return None
 
-# Fetch live price and placeholder target price
+# Fetch live price
 def get_live_price(ticker):
     try:
         stock = yf.Ticker(ticker)
@@ -56,14 +57,14 @@ def get_live_price(ticker):
         st.error(f"Error fetching live price for {ticker}: {e}")
         return "N/A"
 
-# Fetch OpenAI sentiment analysis
-def analyze_sentiment(stock_name, concise=True):
-    prompt = f"Provide a {'concise' if concise else 'detailed'} sentiment analysis for {stock_name}. Summarize recent investor chatter."
+# Analyze sentiment
+def analyze_sentiment(stock_name):
+    prompt = f"Summarize sentiment for {stock_name} in 1-2 sentences. Include any notable optimism or concerns."
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a financial market analyst."},
+                {"role": "system", "content": "You are a financial analyst providing concise stock sentiment analysis."},
                 {"role": "user", "content": prompt},
             ],
         )
@@ -71,16 +72,16 @@ def analyze_sentiment(stock_name, concise=True):
     except Exception as e:
         return f"Error analyzing sentiment: {str(e)}"
 
-# Generate insights for top investors
+# Generate insights for investors
 def generate_investor_insights(stock_name):
     insights = []
     for investor in TOP_INVESTORS:
         try:
-            prompt = f"Based on {investor['strategy']}, what would {investor['name']} recommend for {stock_name}?"
+            prompt = f"What would {investor['name']} recommend for {stock_name}? Provide a concise answer."
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": f"You are {investor['name']}, a renowned investor."},
+                    {"role": "system", "content": f"You are {investor['name']} analyzing {stock_name}."},
                     {"role": "user", "content": prompt},
                 ],
             )
@@ -89,7 +90,27 @@ def generate_investor_insights(stock_name):
             insights.append(f"{investor['name']}: Error generating insights: {str(e)}")
     return "\n".join(insights)
 
-# Back-test logic for confidence level
+# Identify top stocks
+def identify_top_stocks(horizon, stocks):
+    results = []
+    for stock in stocks:
+        data = get_stock_data(stock)
+        if data is None:
+            continue
+        current_price = get_live_price(stock)
+        projected_price = predict_target_price(data, horizon)
+        sentiment = analyze_sentiment(stock)
+        reason_to_buy = f"Projected recovery in {horizon} days."
+        results.append({
+            "Stock": stock,
+            "Current Price": current_price,
+            "Projected Price": projected_price,
+            "Sentiment": sentiment,
+            "Reason to Buy": reason_to_buy,
+        })
+    return pd.DataFrame(results)
+
+# Back-test model
 def backtest_model(data, test_period):
     try:
         train_data = data[:-test_period]
@@ -104,57 +125,50 @@ def backtest_model(data, test_period):
         st.error(f"Error backtesting model: {e}")
         return None
 
-# Analyze top stocks
-def analyze_top_stocks(horizon):
-    results = []
-    for stock in STOCK_LIST:
-        data = get_stock_data(stock)
-        if data is None:
-            continue
-        current_price = get_live_price(stock)
-        projected_price = predict_target_price(data, horizon)
-        sentiment = analyze_sentiment(stock, concise=True)
-        investor_sentiment = generate_investor_insights(stock)
-        results.append({
-            "Stock": stock,
-            "Current Price": current_price,
-            "Projected Price": projected_price,
-            "Investor Sentiment": investor_sentiment,
-            "General Sentiment": sentiment,
-        })
-    return pd.DataFrame(results)
-
 # App layout
 st.title("AI-Powered Stock Dashboard")
 horizon = st.slider("Performance Horizon (Days):", 30, 365, 180)
 
 # Top stocks
-st.subheader("Top 10 Stocks to Buy Now")
-top_stocks = analyze_top_stocks(horizon)
-if not top_stocks.empty:
-    st.table(top_stocks)
-else:
-    st.write("No stock data available.")
+st.subheader("Top Stocks to Buy Now")
+conventional_stocks = identify_top_stocks(horizon, CONVENTIONAL_STOCKS)
+hidden_gems = identify_top_stocks(horizon, HIDDEN_GEMS)
+
+st.write("### Top 5 Conventional Picks")
+st.table(conventional_stocks)
+
+st.write("### Top 5 Hidden Gems")
+st.table(hidden_gems)
 
 # Individual stock analysis
 st.subheader("Individual Stock Analysis")
 stock = st.text_input("Enter Stock Ticker:", "AAPL")
 if stock:
     stock_data = get_stock_data(stock)
-    sentiment = analyze_sentiment(stock, concise=True)
-    investor_insights = generate_investor_insights(stock)
-    st.write(f"General Sentiment for {stock}: {sentiment}")
-    st.write(f"Investor Insights for {stock}: {investor_insights}")
     if stock_data is not None:
+        sentiment = analyze_sentiment(stock)
+        investor_insights = generate_investor_insights(stock)
+
+        st.write(f"**Sentiment for {stock}:** {sentiment}")
+        st.write(f"**Investor Insights for {stock}:** {investor_insights}")
+
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Price'))
+        fig.add_trace(go.Scatter(x=stock_data['Date'], y=stock_data['Close'], mode='lines', name='Historical Prices'))
+
+        projected_price = predict_target_price(stock_data, horizon)
+        fig.add_trace(go.Scatter(
+            x=[stock_data['Date'].iloc[-1] + timedelta(days=i) for i in range(horizon)],
+            y=[projected_price] * horizon,
+            mode='lines',
+            name='Projected Prices'
+        ))
+
         st.plotly_chart(fig)
+
         if st.button("Back Test"):
-            confidence = backtest_model(stock_data, test_period=150)  # Adjustable period
+            confidence = backtest_model(stock_data, test_period=150)
             st.write(f"Confidence Level: {confidence:.2f}%")
 
 # Footer
 st.write("---")
 st.write("AI Dashboard powered by OpenAI and yfinance.")
-
-
