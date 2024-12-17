@@ -7,3 +7,8 @@ textblob
 scikit-learn
 requests
 openai==0.28
+matplotlib
+pandas
+numpy
+scikit-learn
+statsmodels
