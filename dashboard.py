@@ -101,4 +101,3 @@ plt.show()
 print("--- Final Results ---")
 print(f"Top Performing Stock: {top_stock}")
 print(f"Hidden Gem Stock: {hidden_gem_stock}")
-
