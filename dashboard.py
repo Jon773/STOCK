@@ -17,17 +17,16 @@ openai.api_key = "YOUR_API_KEY"
 # Function to get sentiment or chatter summary using OpenAI ChatGPT
 def get_summary(prompt):
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an assistant that summarizes public sentiment and chatter for stocks."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=100
+        response = openai.Completion.create(
+            engine="text-davinci-003",  # Use 'text-davinci-003' for older API versions
+            prompt=prompt,
+            max_tokens=100,
+            temperature=0.7
         )
-        return response.choices[0].message["content"].strip()
+        return response.choices[0].text.strip()
     except Exception as e:
         return "Sentiment unavailable due to API error."
+
 
 # Streamlit App Title
 st.title("📈 Stock Picker, Sentiment, & Projections Dashboard")
